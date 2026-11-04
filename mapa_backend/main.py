@@ -75,7 +75,7 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         inset_temp = os.path.join(tmpdir, "inset_temp.png")
         
         fig_main = pygmt.Figure()
-        fig_main.tilemap(region=region_fmt, projection="M15c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=19)
+        fig_main.tilemap(region=region_fmt, projection="M15c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=17)
         
         datos_extraidos = []
         for i, row in full_gdf.reset_index(drop=True).iterrows():
