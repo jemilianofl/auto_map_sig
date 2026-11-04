@@ -1,0 +1,17 @@
+name: mapa_env
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - geopandas
+  - pygmt
+  - fiona
+  - shapely
+  - matplotlib
+  - pillow
+  - fastapi
+  - uvicorn
+  - python-multipart
+  - contextily
+  - rioxarray
