@@ -19,7 +19,6 @@ from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from PIL import Image
 
-# Habilitar soporte KML
 fiona.drvsupport.supported_drivers['KML'] = 'rw'
 fiona.drvsupport.supported_drivers['LIBKML'] = 'rw'
 
@@ -33,9 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def procesar_mapa_sync(kml_path, autor, config_simbologia):
-    """Función síncrona que realiza el cálculo pesado aislada en un directorio temporal."""
-    
+def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
     layers = fiona.listlayers(kml_path)
     gdfs = []
     for layer in layers:
@@ -50,16 +47,18 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
         raise ValueError("No se encontraron polígonos válidos en el KML.")
             
     full_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs="EPSG:4326")
-    gdf_utm = full_gdf.to_crs(epsg=32614)
     
-    # Extraer centroides para la escala y el mapa de ubicación
+    # 🌍 CÁLCULO DINÁMICO DE UTM
+    utm_crs = full_gdf.estimate_utm_crs()
+    gdf_utm = full_gdf.to_crs(utm_crs)
+    
     centroide_geo = gdf_utm.geometry.centroid.to_crs(epsg=4326).iloc[0]
     lon_centro, lat_centro = centroide_geo.x, centroide_geo.y
     bounds_utm = gdf_utm.geometry.centroid.iloc[0]
     
     buffer_metros = 150
     from shapely.geometry import box
-    bbox_gdf = gpd.GeoDataFrame({'geometry': [box(bounds_utm.x - buffer_metros, bounds_utm.y - buffer_metros, bounds_utm.x + buffer_metros, bounds_utm.y + buffer_metros)]}, crs="EPSG:32614")
+    bbox_gdf = gpd.GeoDataFrame({'geometry': [box(bounds_utm.x - buffer_metros, bounds_utm.y - buffer_metros, bounds_utm.x + buffer_metros, bounds_utm.y + buffer_metros)]}, crs=utm_crs)
     region = bbox_gdf.to_crs(epsg=4326).total_bounds
     region_fmt = [region[0], region[2], region[1], region[3]]
 
@@ -67,17 +66,14 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
         mapa_temp = os.path.join(tmpdir, "mapa_temp.png")
         inset_temp = os.path.join(tmpdir, "inset_temp.png")
         
-        # 1. Mapa Base PyGMT
         fig_main = pygmt.Figure()
         fig_main.tilemap(region=region_fmt, projection="M15c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=19)
         
         datos_extraidos = []
         for i, row in full_gdf.reset_index(drop=True).iterrows():
             nombre = str(row.get('Name')).strip()
-            
             if nombre not in config_simbologia:
                 continue
-                
             color_hex = config_simbologia.get(nombre, "#FF0000")
             datos_extraidos.append((nombre, "", color_hex))
             
@@ -85,19 +81,16 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
             fig_main.plot(data=gdf_single, pen="1.5p,white", fill=f"{color_hex}@50")
             
         fig_main.basemap(frame=["a", "WSne"], rose="jTL+w1.5c+o0.3c/0.3c+f2")
-        # Restaurado: Escala del mapa
         fig_main.basemap(map_scale=f"jBR+c{lat_centro}+w50e+o1.2c/1.2c+f+l", box="+gwhite@50+p0.5p,gray")
         fig_main.savefig(mapa_temp, dpi=300)
         
-        # Restaurado: Generar Inset (Mapa de ubicación de México)
         fig_inset = pygmt.Figure()
-        region_inset = [-100, -92, 14, 19]
-        fig_inset.tilemap(region=region_inset, projection="M4c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=6)
+        region_inset = [-118, -86, 14, 33] # Ampliado para abarcar todo México
+        fig_inset.tilemap(region=region_inset, projection="M4c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=5)
         fig_inset.coast(borders=["1/0.8p,white", "2/0.3p,white,dashed"])
         fig_inset.plot(x=[lon_centro], y=[lat_centro], style="c0.2c", fill="red", pen="white")
         fig_inset.savefig(inset_temp, transparent=True, crop=True, dpi=300)
         
-        # 2. Ensamblar layout institucional
         fig = plt.figure(figsize=(15, 10.5), facecolor='white')
         gs = GridSpec(1, 2, width_ratios=[3.2, 1.2], wspace=0.03)
         
@@ -128,12 +121,13 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
             ax_panel.text(0.5, y_top - 0.015, title, color='white', weight='bold', ha='center', va='center', fontsize=10)
             ax_panel.add_patch(plt.Rectangle((0, y_top - height), 1, height - 0.03, fill=False, edgecolor='black', linewidth=1.2))
 
-        # Restaurado: Localización geográfica
+        # 📍 TEXTO DE LOCALIZACIÓN DINÁMICO
         draw_box(y_top=0.83, height=0.25, title="Localización geográfica")
         ax_panel.imshow(Image.open(inset_temp), extent=[0.05, 0.95, 0.65, 0.79], aspect='auto')
-        ax_panel.text(0.5, 0.615, "Estado: Oaxaca\nMunicipio: Santa María Huatulco\nPolígono ZOFEMAT", ha='center', va='center', fontsize=9)
+        estado_txt = estado.strip() if estado.strip() else "No especificado"
+        municipio_txt = municipio.strip() if municipio.strip() else "No especificado"
+        ax_panel.text(0.5, 0.615, f"Estado: {estado_txt}\nMunicipio: {municipio_txt}\nPolígono ZOFEMAT", ha='center', va='center', fontsize=9)
 
-        # Simbología Centrada y con salto de línea
         altura_simbologia = 0.03 + (len(datos_extraidos) * 0.07)
         draw_box(y_top=0.56, height=altura_simbologia, title="Simbología")
         y_offset = 0.56 - 0.03 - 0.035
@@ -146,24 +140,22 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
         
         y_actual = 0.56 - altura_simbologia - 0.02
 
-        # Sistema de Referencia
+        # 📐 DATUM UTM DINÁMICO
+        utm_name = utm_crs.name.replace("WGS 84 / ", "") # Limpia el string para dejar "UTM zone XXN"
         draw_box(y_top=y_actual, height=0.08, title="Sistema de Referencia:", bg_color='#4C8C56')
-        ax_panel.text(0.5, y_actual - 0.055, "DATUM WGS84 Zona 14 N\nProyección Transversal de Mercator", ha='center', va='center', fontsize=9)
+        ax_panel.text(0.5, y_actual - 0.055, f"DATUM WGS84 {utm_name}\nProyección Transversal de Mercator", ha='center', va='center', fontsize=9)
         y_actual -= 0.10
         
-        # Autor Dinámico (Opcional)
         if autor and autor.strip():
             draw_box(y_top=y_actual, height=0.08, title="Autor del Levantamiento:", bg_color='#A01F41')
             ax_panel.text(0.5, y_actual - 0.055, autor.strip(), ha='center', va='center', fontsize=9)
             y_actual -= 0.11
 
-        # Fecha de elaboración
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
         fecha_str = f"{meses[datetime.now().month - 1]} de {datetime.now().year}"
         ax_panel.add_patch(plt.Rectangle((0, y_actual - 0.05), 1, 0.05, fill=False, edgecolor='black', linewidth=1.2))
         ax_panel.text(0.5, y_actual - 0.025, f"Fecha de elaboración: {fecha_str}", color='black', weight='bold', ha='center', va='center', fontsize=9)
 
-        # Guardar en memoria
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
         plt.close(fig)
@@ -174,7 +166,9 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
 @app.post("/generar-mapa/")
 async def generar_mapa(
     archivo: UploadFile = File(...),
-    autor: str = Form(""), # <-- Cambiado para que sea opcional por defecto
+    autor: str = Form(""), 
+    estado: str = Form(""), # <-- Nuevo campo
+    municipio: str = Form(""), # <-- Nuevo campo
     simbologia: str = Form(...) 
 ):
     config_simbologia = json.loads(simbologia)
@@ -188,7 +182,9 @@ async def generar_mapa(
             procesar_mapa_sync, 
             temp_kml_path, 
             autor, 
-            config_simbologia
+            config_simbologia,
+            estado,
+            municipio
         )
         return StreamingResponse(image_buffer, media_type="image/png")
     

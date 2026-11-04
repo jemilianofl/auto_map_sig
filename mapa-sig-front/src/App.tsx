@@ -3,6 +3,8 @@ import axios from 'axios';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
+  const [estadoGeo, setEstadoGeo] = useState("Oaxaca");
+  const [municipio, setMunicipio] = useState("Santa María Huatulco");
   const [incluirAutor, setIncluirAutor] = useState(true);
   const [autor, setAutor] = useState("Responsable Técnico ZOFEMAT");
   const [simbologia, setSimbologia] = useState<Record<string, { color: string, visible: boolean }>>({});
@@ -32,10 +34,7 @@ function App() {
       const nuevaSimbologia: Record<string, { color: string, visible: boolean }> = {};
       
       Array.from(uniqueNames).forEach((nombre, index) => {
-        nuevaSimbologia[nombre] = {
-          color: coloresBase[index % coloresBase.length],
-          visible: true
-        };
+        nuevaSimbologia[nombre] = { color: coloresBase[index % coloresBase.length], visible: true };
       });
 
       setSimbologia(nuevaSimbologia);
@@ -44,12 +43,12 @@ function App() {
     }
   };
 
-  const handleColorChange = (nombre: string, color: string) => {
-    setSimbologia(prev => ({ ...prev, [nombre]: { ...prev[nombre], color } }));
-  };
-
   const toggleVisible = (nombre: string) => {
     setSimbologia(prev => ({ ...prev, [nombre]: { ...prev[nombre], visible: !prev[nombre].visible } }));
+  };
+
+  const handleColorChange = (nombre: string, color: string) => {
+    setSimbologia(prev => ({ ...prev, [nombre]: { ...prev[nombre], color } }));
   };
 
   const generarMapa = async () => {
@@ -57,9 +56,7 @@ function App() {
     
     const configAEnviar: Record<string, string> = {};
     Object.entries(simbologia).forEach(([nombre, config]) => {
-      if (config.visible) {
-        configAEnviar[nombre] = config.color;
-      }
+      if (config.visible) configAEnviar[nombre] = config.color;
     });
 
     if (Object.keys(configAEnviar).length === 0) {
@@ -69,10 +66,11 @@ function App() {
     setCargando(true);
     const formData = new FormData();
     formData.append("archivo", file);
-    formData.append("autor", incluirAutor ? autor : "");
+    formData.append("estado", estadoGeo);
+    formData.append("municipio", municipio);
+    formData.append("autor", incluirAutor ? autor : ""); 
     formData.append("simbologia", JSON.stringify(configAEnviar));
 
-    // Usar la variable de entorno (si no existe, usa localhost por seguridad)
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
     try {
@@ -94,30 +92,29 @@ function App() {
       <div style={{ width: '350px', padding: '20px', background: '#f5f5f5', overflowY: 'auto', flexShrink: 0, boxShadow: '2px 0 5px rgba(0,0,0,0.1)', zIndex: 10 }}>
         <h2 style={{ fontSize: '1.2rem', color: '#333' }}>Configuración del Mapa</h2>
         
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '15px' }}>
           <label style={{ fontSize: '0.9rem', color: '#555' }}><strong>Archivo KML:</strong></label><br/>
           <input type="file" accept=".kml" onChange={handleFileChange} style={{ marginTop: '8px', fontSize: '0.85rem' }} />
         </div>
 
-        <div style={{ marginBottom: '20px' }}>
+        <div style={{ marginBottom: '15px', display: 'flex', gap: '10px' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '0.85rem', color: '#555' }}><strong>Estado:</strong></label>
+            <input type="text" value={estadoGeo} onChange={e => setEstadoGeo(e.target.value)} style={{ width: '100%', padding: '6px', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: '0.85rem', color: '#555' }}><strong>Municipio:</strong></label>
+            <input type="text" value={municipio} onChange={e => setMunicipio(e.target.value)} style={{ width: '100%', padding: '6px', boxSizing: 'border-box' }} />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '15px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <input 
-              type="checkbox" 
-              checked={incluirAutor} 
-              onChange={e => setIncluirAutor(e.target.checked)} 
-              id="chk-autor"
-            />
-            <label htmlFor="chk-autor" style={{ fontSize: '0.9rem', color: '#555', fontWeight: 'bold', cursor: 'pointer' }}>
-              Incluir Autor
-            </label>
+            <input type="checkbox" checked={incluirAutor} onChange={e => setIncluirAutor(e.target.checked)} id="chk-autor" />
+            <label htmlFor="chk-autor" style={{ fontSize: '0.9rem', color: '#555', fontWeight: 'bold', cursor: 'pointer' }}>Incluir Autor</label>
           </div>
           {incluirAutor && (
-            <input 
-              type="text" 
-              value={autor} 
-              onChange={e => setAutor(e.target.value)} 
-              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-            />
+            <input type="text" value={autor} onChange={e => setAutor(e.target.value)} style={{ width: '100%', padding: '6px', boxSizing: 'border-box' }} />
           )}
         </div>
 
@@ -127,22 +124,9 @@ function App() {
           
           {Object.entries(simbologia).map(([nombre, config]) => (
             <div key={nombre} style={{ display: 'flex', alignItems: 'center', marginTop: '12px', gap: '8px' }}>
-              <input 
-                type="checkbox" 
-                checked={config.visible} 
-                onChange={() => toggleVisible(nombre)} 
-                title="Mostrar/Ocultar capa"
-              />
-              <input 
-                type="color" 
-                value={config.color} 
-                onChange={e => handleColorChange(nombre, e.target.value)} 
-                disabled={!config.visible}
-                style={{ opacity: config.visible ? 1 : 0.4, cursor: config.visible ? 'pointer' : 'not-allowed' }}
-              />
-              <span style={{ fontSize: '11px', color: config.visible ? '#333' : '#999', lineHeight: '1.2' }}>
-                {nombre}
-              </span>
+              <input type="checkbox" checked={config.visible} onChange={() => toggleVisible(nombre)} title="Mostrar/Ocultar capa" />
+              <input type="color" value={config.color} onChange={e => handleColorChange(nombre, e.target.value)} disabled={!config.visible} style={{ opacity: config.visible ? 1 : 0.4, cursor: config.visible ? 'pointer' : 'not-allowed' }} />
+              <span style={{ fontSize: '11px', color: config.visible ? '#333' : '#999', lineHeight: '1.2' }}>{nombre}</span>
             </div>
           ))}
         </div>
@@ -158,17 +142,7 @@ function App() {
 
       <div style={{ flexGrow: 1, padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#2c2c2c' }}>
         {mapaUrl ? (
-          <img 
-            src={mapaUrl} 
-            alt="Mapa Generado" 
-            style={{ 
-              width: '100%', 
-              height: '100%', 
-              objectFit: 'contain',
-              boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
-              backgroundColor: 'white'
-            }} 
-          />
+          <img src={mapaUrl} alt="Mapa Generado" style={{ width: '100%', height: '100%', objectFit: 'contain', boxShadow: '0 8px 16px rgba(0,0,0,0.3)', backgroundColor: 'white' }} />
         ) : (
           <div style={{ color: '#888', textAlign: 'center' }}>
             <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Visor Cartográfico</p>
