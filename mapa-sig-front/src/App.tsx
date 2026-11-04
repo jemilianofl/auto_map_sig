@@ -3,8 +3,8 @@ import axios from 'axios';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
+  const [incluirAutor, setIncluirAutor] = useState(true);
   const [autor, setAutor] = useState("Responsable Técnico ZOFEMAT");
-  // Ahora el estado guarda el color y si la capa está visible
   const [simbologia, setSimbologia] = useState<Record<string, { color: string, visible: boolean }>>({});
   const [mapaUrl, setMapaUrl] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -55,7 +55,6 @@ function App() {
   const generarMapa = async () => {
     if (!file) return alert("Por favor selecciona un archivo KML");
     
-    // Filtrar solo las capas que están marcadas como visibles
     const configAEnviar: Record<string, string> = {};
     Object.entries(simbologia).forEach(([nombre, config]) => {
       if (config.visible) {
@@ -70,7 +69,7 @@ function App() {
     setCargando(true);
     const formData = new FormData();
     formData.append("archivo", file);
-    formData.append("autor", autor);
+    formData.append("autor", incluirAutor ? autor : ""); // Si está desactivado, enviamos string vacío
     formData.append("simbologia", JSON.stringify(configAEnviar));
 
     try {
@@ -89,7 +88,6 @@ function App() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: 'sans-serif', margin: 0 }}>
-      {/* Panel de Controles (Ancho fijo) */}
       <div style={{ width: '350px', padding: '20px', background: '#f5f5f5', overflowY: 'auto', flexShrink: 0, boxShadow: '2px 0 5px rgba(0,0,0,0.1)', zIndex: 10 }}>
         <h2 style={{ fontSize: '1.2rem', color: '#333' }}>Configuración del Mapa</h2>
         
@@ -99,13 +97,25 @@ function App() {
         </div>
 
         <div style={{ marginBottom: '20px' }}>
-          <label style={{ fontSize: '0.9rem', color: '#555' }}><strong>Autor del Levantamiento:</strong></label><br/>
-          <input 
-            type="text" 
-            value={autor} 
-            onChange={e => setAutor(e.target.value)} 
-            style={{ width: '100%', padding: '8px', marginTop: '8px', boxSizing: 'border-box' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <input 
+              type="checkbox" 
+              checked={incluirAutor} 
+              onChange={e => setIncluirAutor(e.target.checked)} 
+              id="chk-autor"
+            />
+            <label htmlFor="chk-autor" style={{ fontSize: '0.9rem', color: '#555', fontWeight: 'bold', cursor: 'pointer' }}>
+              Incluir Autor
+            </label>
+          </div>
+          {incluirAutor && (
+            <input 
+              type="text" 
+              value={autor} 
+              onChange={e => setAutor(e.target.value)} 
+              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+            />
+          )}
         </div>
 
         <div style={{ marginBottom: '20px' }}>
@@ -143,7 +153,6 @@ function App() {
         </button>
       </div>
 
-      {/* Panel de Previsualización (Ocupa todo el espacio restante) */}
       <div style={{ flexGrow: 1, padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#2c2c2c' }}>
         {mapaUrl ? (
           <img 
@@ -152,7 +161,7 @@ function App() {
             style={{ 
               width: '100%', 
               height: '100%', 
-              objectFit: 'contain', /* Mantiene las proporciones de 15x10.5 sin recortar */
+              objectFit: 'contain',
               boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
               backgroundColor: 'white'
             }} 

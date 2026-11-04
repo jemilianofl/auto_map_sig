@@ -146,17 +146,18 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
         
         y_actual = 0.56 - altura_simbologia - 0.02
 
-        # Restaurado: Sistema de Referencia
+        # Sistema de Referencia
         draw_box(y_top=y_actual, height=0.08, title="Sistema de Referencia:", bg_color='#4C8C56')
         ax_panel.text(0.5, y_actual - 0.055, "DATUM WGS84 Zona 14 N\nProyección Transversal de Mercator", ha='center', va='center', fontsize=9)
         y_actual -= 0.10
         
-        # Autor Dinámico
-        draw_box(y_top=y_actual, height=0.08, title="Autor del Levantamiento:", bg_color='#A01F41')
-        ax_panel.text(0.5, y_actual - 0.055, autor, ha='center', va='center', fontsize=9)
-        y_actual -= 0.11
+        # Autor Dinámico (Opcional)
+        if autor and autor.strip():
+            draw_box(y_top=y_actual, height=0.08, title="Autor del Levantamiento:", bg_color='#A01F41')
+            ax_panel.text(0.5, y_actual - 0.055, autor.strip(), ha='center', va='center', fontsize=9)
+            y_actual -= 0.11
 
-        # Restaurado: Fecha de elaboración
+        # Fecha de elaboración
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
         fecha_str = f"{meses[datetime.now().month - 1]} de {datetime.now().year}"
         ax_panel.add_patch(plt.Rectangle((0, y_actual - 0.05), 1, 0.05, fill=False, edgecolor='black', linewidth=1.2))
@@ -173,7 +174,7 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia):
 @app.post("/generar-mapa/")
 async def generar_mapa(
     archivo: UploadFile = File(...),
-    autor: str = Form(...),
+    autor: str = Form(""), # <-- Cambiado para que sea opcional por defecto
     simbologia: str = Form(...) 
 ):
     config_simbologia = json.loads(simbologia)
