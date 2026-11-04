@@ -4,11 +4,11 @@ import axios from 'axios';
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [autor, setAutor] = useState("Responsable Técnico ZOFEMAT");
-  const [simbologia, setSimbologia] = useState<Record<string, string>>({});
+  // Ahora el estado guarda el color y si la capa está visible
+  const [simbologia, setSimbologia] = useState<Record<string, { color: string, visible: boolean }>>({});
   const [mapaUrl, setMapaUrl] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
 
-  // Leer el KML y extraer las capas dinámicamente
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0] || null;
     setFile(selectedFile);
@@ -29,10 +29,13 @@ function App() {
       });
 
       const coloresBase = ["#FF0000", "#1E90FF", "#32CD32", "#FFD700", "#8A2BE2"];
-      const nuevaSimbologia: Record<string, string> = {};
+      const nuevaSimbologia: Record<string, { color: string, visible: boolean }> = {};
       
       Array.from(uniqueNames).forEach((nombre, index) => {
-        nuevaSimbologia[nombre] = coloresBase[index % coloresBase.length];
+        nuevaSimbologia[nombre] = {
+          color: coloresBase[index % coloresBase.length],
+          visible: true
+        };
       });
 
       setSimbologia(nuevaSimbologia);
@@ -42,17 +45,33 @@ function App() {
   };
 
   const handleColorChange = (nombre: string, color: string) => {
-    setSimbologia(prev => ({ ...prev, [nombre]: color }));
+    setSimbologia(prev => ({ ...prev, [nombre]: { ...prev[nombre], color } }));
+  };
+
+  const toggleVisible = (nombre: string) => {
+    setSimbologia(prev => ({ ...prev, [nombre]: { ...prev[nombre], visible: !prev[nombre].visible } }));
   };
 
   const generarMapa = async () => {
     if (!file) return alert("Por favor selecciona un archivo KML");
     
+    // Filtrar solo las capas que están marcadas como visibles
+    const configAEnviar: Record<string, string> = {};
+    Object.entries(simbologia).forEach(([nombre, config]) => {
+      if (config.visible) {
+        configAEnviar[nombre] = config.color;
+      }
+    });
+
+    if (Object.keys(configAEnviar).length === 0) {
+      return alert("Debes seleccionar al menos una capa para generar el mapa.");
+    }
+    
     setCargando(true);
     const formData = new FormData();
     formData.append("archivo", file);
     formData.append("autor", autor);
-    formData.append("simbologia", JSON.stringify(simbologia));
+    formData.append("simbologia", JSON.stringify(configAEnviar));
 
     try {
       const response = await axios.post("http://localhost:8000/generar-mapa/", formData, {
@@ -69,37 +88,48 @@ function App() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      <div style={{ width: '30%', padding: '20px', background: '#f5f5f5', overflowY: 'auto' }}>
-        <h2>Configuración del Mapa</h2>
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', fontFamily: 'sans-serif', margin: 0 }}>
+      {/* Panel de Controles (Ancho fijo) */}
+      <div style={{ width: '350px', padding: '20px', background: '#f5f5f5', overflowY: 'auto', flexShrink: 0, boxShadow: '2px 0 5px rgba(0,0,0,0.1)', zIndex: 10 }}>
+        <h2 style={{ fontSize: '1.2rem', color: '#333' }}>Configuración del Mapa</h2>
         
         <div style={{ marginBottom: '20px' }}>
-          <label><strong>Archivo KML:</strong></label><br/>
-          <input type="file" accept=".kml" onChange={handleFileChange} />
+          <label style={{ fontSize: '0.9rem', color: '#555' }}><strong>Archivo KML:</strong></label><br/>
+          <input type="file" accept=".kml" onChange={handleFileChange} style={{ marginTop: '8px', fontSize: '0.85rem' }} />
         </div>
 
         <div style={{ marginBottom: '20px' }}>
-          <label><strong>Autor del Levantamiento:</strong></label><br/>
+          <label style={{ fontSize: '0.9rem', color: '#555' }}><strong>Autor del Levantamiento:</strong></label><br/>
           <input 
             type="text" 
             value={autor} 
             onChange={e => setAutor(e.target.value)} 
-            style={{ width: '100%', padding: '8px' }}
+            style={{ width: '100%', padding: '8px', marginTop: '8px', boxSizing: 'border-box' }}
           />
         </div>
 
         <div style={{ marginBottom: '20px' }}>
-          <label><strong>Simbología Detectada:</strong></label>
-          {Object.keys(simbologia).length === 0 && <p style={{fontSize: '12px', color: '#666'}}>Sube un KML para ver las capas</p>}
-          {Object.entries(simbologia).map(([nombre, color]) => (
-            <div key={nombre} style={{ display: 'flex', alignItems: 'center', marginTop: '10px' }}>
+          <label style={{ fontSize: '0.9rem', color: '#555' }}><strong>Capas y Simbología:</strong></label>
+          {Object.keys(simbologia).length === 0 && <p style={{fontSize: '12px', color: '#888'}}>Sube un KML para detectar capas</p>}
+          
+          {Object.entries(simbologia).map(([nombre, config]) => (
+            <div key={nombre} style={{ display: 'flex', alignItems: 'center', marginTop: '12px', gap: '8px' }}>
+              <input 
+                type="checkbox" 
+                checked={config.visible} 
+                onChange={() => toggleVisible(nombre)} 
+                title="Mostrar/Ocultar capa"
+              />
               <input 
                 type="color" 
-                value={color} 
+                value={config.color} 
                 onChange={e => handleColorChange(nombre, e.target.value)} 
-                style={{ marginRight: '10px' }}
+                disabled={!config.visible}
+                style={{ opacity: config.visible ? 1 : 0.4, cursor: config.visible ? 'pointer' : 'not-allowed' }}
               />
-              <span style={{ fontSize: '12px' }}>{nombre}</span>
+              <span style={{ fontSize: '11px', color: config.visible ? '#333' : '#999', lineHeight: '1.2' }}>
+                {nombre}
+              </span>
             </div>
           ))}
         </div>
@@ -107,17 +137,31 @@ function App() {
         <button 
           onClick={generarMapa} 
           disabled={cargando || !file}
-          style={{ width: '100%', padding: '10px', background: '#A01F41', color: 'white', border: 'none', cursor: cargando || !file ? 'not-allowed' : 'pointer' }}
+          style={{ width: '100%', padding: '12px', background: '#A01F41', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: cargando || !file ? 'not-allowed' : 'pointer', opacity: cargando || !file ? 0.7 : 1 }}
         >
-          {cargando ? 'Generando...' : 'Actualizar Previsualización'}
+          {cargando ? 'Procesando mapa...' : 'Actualizar Previsualización'}
         </button>
       </div>
 
-      <div style={{ width: '70%', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#e0e0e0' }}>
+      {/* Panel de Previsualización (Ocupa todo el espacio restante) */}
+      <div style={{ flexGrow: 1, padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#2c2c2c' }}>
         {mapaUrl ? (
-          <img src={mapaUrl} alt="Previsualización del Mapa" style={{ maxWidth: '100%', maxHeight: '100%', boxShadow: '0 4px 8px rgba(0,0,0,0.2)' }} />
+          <img 
+            src={mapaUrl} 
+            alt="Mapa Generado" 
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'contain', /* Mantiene las proporciones de 15x10.5 sin recortar */
+              boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+              backgroundColor: 'white'
+            }} 
+          />
         ) : (
-          <p style={{ color: '#666' }}>El mapa generado aparecerá aquí.</p>
+          <div style={{ color: '#888', textAlign: 'center' }}>
+            <p style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Visor Cartográfico</p>
+            <p style={{ fontSize: '0.9rem' }}>Sube tu KML y haz clic en "Actualizar Previsualización"</p>
+          </div>
         )}
       </div>
     </div>
