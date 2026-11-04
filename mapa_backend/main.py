@@ -5,6 +5,11 @@ import tempfile
 import asyncio
 import textwrap
 from datetime import datetime
+import gc  # <-- NUEVO: Recolector de basura
+
+import matplotlib
+matplotlib.use('Agg')
+
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -156,11 +161,18 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         ax_panel.add_patch(plt.Rectangle((0, y_actual - 0.05), 1, 0.05, fill=False, edgecolor='black', linewidth=1.2))
         ax_panel.text(0.5, y_actual - 0.025, f"Fecha de elaboración: {fecha_str}", color='black', weight='bold', ha='center', va='center', fontsize=9)
 
+        # Guardar en memoria
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-        plt.close(fig)
-        buf.seek(0)
+        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight') # <-- Bajé los DPI de 300 a 200 para ahorrar RAM
         
+        # LIMPIEZA EXTREMA DE RAM
+        fig_main.savefig(mapa_temp) # (Por si pygmt dejó algo en buffer)
+        plt.clf()
+        plt.close('all')
+        del fig, fig_main, fig_inset, full_gdf, gdf_utm 
+        gc.collect() # Forzar a Windows/Linux a liberar la memoria
+        
+        buf.seek(0)
         return buf
 
 @app.post("/generar-mapa/")
