@@ -72,6 +72,7 @@ function App() {
     formData.append("simbologia", JSON.stringify(configAEnviar));
 
     const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    console.log("🚀 URL de la API detectada:", apiUrl);
 
     try {
       const response = await axios.post(`${apiUrl}/generar-mapa/`, formData, {
@@ -138,6 +139,11 @@ function App() {
         >
           {cargando ? 'Procesando mapa...' : 'Actualizar Previsualización'}
         </button>
+
+        {/* 👇 INDICADOR DE DEPURACIÓN NUEVO 👇 */}
+        <p style={{ fontSize: '10px', color: '#999', marginTop: '20px', textAlign: 'center', wordBreak: 'break-all' }}>
+          Servidor activo: {import.meta.env.VITE_API_URL || "http://localhost:8000"}
+        </p>
       </div>
 
       <div style={{ flexGrow: 1, padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#2c2c2c' }}>
