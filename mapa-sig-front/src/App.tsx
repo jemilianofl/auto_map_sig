@@ -69,11 +69,14 @@ function App() {
     setCargando(true);
     const formData = new FormData();
     formData.append("archivo", file);
-    formData.append("autor", incluirAutor ? autor : ""); // Si está desactivado, enviamos string vacío
+    formData.append("autor", incluirAutor ? autor : "");
     formData.append("simbologia", JSON.stringify(configAEnviar));
 
+    // Usar la variable de entorno (si no existe, usa localhost por seguridad)
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
     try {
-      const response = await axios.post("http://localhost:8000/generar-mapa/", formData, {
+      const response = await axios.post(`${apiUrl}/generar-mapa/`, formData, {
         responseType: 'blob'
       });
       const url = URL.createObjectURL(response.data);
