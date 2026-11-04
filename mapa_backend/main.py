@@ -26,13 +26,8 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", # Para cuando pruebes en tu compu
-        "https://mapa-sig-front-lm7jzcjlw-emiliano-flores-projects.vercel.app", # Tu URL actual de Vercel
-        # Si Vercel te da otra URL más limpia (ej. mapa-sig-front.vercel.app), agrégala aquí también:
-        "https://mapa-sig-front.vercel.app" 
-    ], 
-    allow_credentials=True,
+    allow_origins=["*"],  # Permite cualquier URL (Vercel, localhost, etc.)
+    allow_credentials=False, # Debe ser False si se usa "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
