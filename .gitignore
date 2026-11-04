@@ -1,0 +1,7 @@
+mapa_backend/venv/
+mapa_backend/__pycache__/
+mapa-sig-front/node_modules/
+mapa-sig-front/dist/
+*.png
+*.kml
+.env
