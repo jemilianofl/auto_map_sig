@@ -4,14 +4,15 @@ import io
 import tempfile
 import asyncio
 import textwrap
+import traceback
 from datetime import datetime
-import gc  # <-- NUEVO: Recolector de basura
+import gc
 
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') # Ahorro estricto de memoria
 
 from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import geopandas as gpd
@@ -31,11 +32,15 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite cualquier URL (Vercel, localhost, etc.)
-    allow_credentials=False, # Debe ser False si se usa "*"
+    allow_origins=["*"], 
+    allow_credentials=False, # Debe ser False para aceptar el comodín "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def home():
+    return {"status": "online", "mensaje": "API ZOFEMAT lista 🚀"}
 
 def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
     layers = fiona.listlayers(kml_path)
@@ -52,8 +57,6 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         raise ValueError("No se encontraron polígonos válidos en el KML.")
             
     full_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs="EPSG:4326")
-    
-    # 🌍 CÁLCULO DINÁMICO DE UTM
     utm_crs = full_gdf.estimate_utm_crs()
     gdf_utm = full_gdf.to_crs(utm_crs)
     
@@ -90,7 +93,7 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         fig_main.savefig(mapa_temp, dpi=300)
         
         fig_inset = pygmt.Figure()
-        region_inset = [-118, -86, 14, 33] # Ampliado para abarcar todo México
+        region_inset = [-118, -86, 14, 33]
         fig_inset.tilemap(region=region_inset, projection="M4c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=5)
         fig_inset.coast(borders=["1/0.8p,white", "2/0.3p,white,dashed"])
         fig_inset.plot(x=[lon_centro], y=[lat_centro], style="c0.2c", fill="red", pen="white")
@@ -126,7 +129,6 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
             ax_panel.text(0.5, y_top - 0.015, title, color='white', weight='bold', ha='center', va='center', fontsize=10)
             ax_panel.add_patch(plt.Rectangle((0, y_top - height), 1, height - 0.03, fill=False, edgecolor='black', linewidth=1.2))
 
-        # 📍 TEXTO DE LOCALIZACIÓN DINÁMICO
         draw_box(y_top=0.83, height=0.25, title="Localización geográfica")
         ax_panel.imshow(Image.open(inset_temp), extent=[0.05, 0.95, 0.65, 0.79], aspect='auto')
         estado_txt = estado.strip() if estado.strip() else "No especificado"
@@ -145,8 +147,7 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         
         y_actual = 0.56 - altura_simbologia - 0.02
 
-        # 📐 DATUM UTM DINÁMICO
-        utm_name = utm_crs.name.replace("WGS 84 / ", "") # Limpia el string para dejar "UTM zone XXN"
+        utm_name = utm_crs.name.replace("WGS 84 / ", "")
         draw_box(y_top=y_actual, height=0.08, title="Sistema de Referencia:", bg_color='#4C8C56')
         ax_panel.text(0.5, y_actual - 0.055, f"DATUM WGS84 {utm_name}\nProyección Transversal de Mercator", ha='center', va='center', fontsize=9)
         y_actual -= 0.10
@@ -161,16 +162,13 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         ax_panel.add_patch(plt.Rectangle((0, y_actual - 0.05), 1, 0.05, fill=False, edgecolor='black', linewidth=1.2))
         ax_panel.text(0.5, y_actual - 0.025, f"Fecha de elaboración: {fecha_str}", color='black', weight='bold', ha='center', va='center', fontsize=9)
 
-        # Guardar en memoria
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight') # <-- Bajé los DPI de 300 a 200 para ahorrar RAM
+        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
         
-        # LIMPIEZA EXTREMA DE RAM
-        fig_main.savefig(mapa_temp) # (Por si pygmt dejó algo en buffer)
         plt.clf()
         plt.close('all')
         del fig, fig_main, fig_inset, full_gdf, gdf_utm 
-        gc.collect() # Forzar a Windows/Linux a liberar la memoria
+        gc.collect()
         
         buf.seek(0)
         return buf
@@ -179,17 +177,17 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
 async def generar_mapa(
     archivo: UploadFile = File(...),
     autor: str = Form(""), 
-    estado: str = Form(""), # <-- Nuevo campo
-    municipio: str = Form(""), # <-- Nuevo campo
+    estado: str = Form(""), 
+    municipio: str = Form(""), 
     simbologia: str = Form(...) 
 ):
-    config_simbologia = json.loads(simbologia)
-    
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".kml") as temp_kml:
-        temp_kml.write(await archivo.read())
-        temp_kml_path = temp_kml.name
-
     try:
+        config_simbologia = json.loads(simbologia)
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".kml") as temp_kml:
+            temp_kml.write(await archivo.read())
+            temp_kml_path = temp_kml.name
+
         image_buffer = await asyncio.to_thread(
             procesar_mapa_sync, 
             temp_kml_path, 
@@ -200,6 +198,14 @@ async def generar_mapa(
         )
         return StreamingResponse(image_buffer, media_type="image/png")
     
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        print(f"ERROR CRITICO: {error_trace}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)},
+            headers={"Access-Control-Allow-Origin": "*"}
+        )
     finally:
-        if os.path.exists(temp_kml_path):
+        if 'temp_kml_path' in locals() and os.path.exists(temp_kml_path):
             os.remove(temp_kml_path)
