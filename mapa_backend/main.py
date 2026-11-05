@@ -33,7 +33,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
-    allow_credentials=False, # Debe ser False para aceptar el comodín "*"
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -75,7 +75,8 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         inset_temp = os.path.join(tmpdir, "inset_temp.png")
         
         fig_main = pygmt.Figure()
-        fig_main.tilemap(region=region_fmt, projection="M15c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=17)
+        # 🔥 OPTIMIZACIÓN 1: Reducción drástica del Zoom a Nivel 16
+        fig_main.tilemap(region=region_fmt, projection="M15c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=16)
         
         datos_extraidos = []
         for i, row in full_gdf.reset_index(drop=True).iterrows():
@@ -90,16 +91,20 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
             
         fig_main.basemap(frame=["a", "WSne"], rose="jTL+w1.5c+o0.3c/0.3c+f2")
         fig_main.basemap(map_scale=f"jBR+c{lat_centro}+w50e+o1.2c/1.2c+f+l", box="+gwhite@50+p0.5p,gray")
-        fig_main.savefig(mapa_temp, dpi=300)
+        
+        # 🔥 OPTIMIZACIÓN 2: Generar la imagen satelital en 150 DPI
+        fig_main.savefig(mapa_temp, dpi=150)
         
         fig_inset = pygmt.Figure()
         region_inset = [-118, -86, 14, 33]
-        fig_inset.tilemap(region=region_inset, projection="M4c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=5)
+        # 🔥 OPTIMIZACIÓN 3: Zoom del Inset rebajado a Nivel 4 y a 100 DPI
+        fig_inset.tilemap(region=region_inset, projection="M4c", source="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", zoom=4)
         fig_inset.coast(borders=["1/0.8p,white", "2/0.3p,white,dashed"])
         fig_inset.plot(x=[lon_centro], y=[lat_centro], style="c0.2c", fill="red", pen="white")
-        fig_inset.savefig(inset_temp, transparent=True, crop=True, dpi=300)
+        fig_inset.savefig(inset_temp, transparent=True, crop=True, dpi=100)
         
-        fig = plt.figure(figsize=(15, 10.5), facecolor='white')
+        # 🔥 OPTIMIZACIÓN 4: Lienzo principal más pequeño
+        fig = plt.figure(figsize=(12, 8), facecolor='white')
         gs = GridSpec(1, 2, width_ratios=[3.2, 1.2], wspace=0.03)
         
         ax_map = fig.add_subplot(gs[0])
@@ -121,19 +126,19 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
             ax_footer.imshow(Image.open("footer.png"))
             ax_footer.axis('off')
 
-        ax_panel.text(0.5, 0.88, "PROCURADURÍA FEDERAL DE PROTECCIÓN\nAL AMBIENTE", weight='bold', ha='center', va='center', fontsize=10)
-        ax_panel.text(0.5, 0.85, "Subprocuraduría de Recursos Naturales", ha='center', va='center', fontsize=9)
+        ax_panel.text(0.5, 0.88, "PROCURADURÍA FEDERAL DE PROTECCIÓN\nAL AMBIENTE", weight='bold', ha='center', va='center', fontsize=9)
+        ax_panel.text(0.5, 0.85, "Subprocuraduría de Recursos Naturales", ha='center', va='center', fontsize=8)
 
         def draw_box(y_top, height, title, bg_color='#A01F41'):
             ax_panel.add_patch(plt.Rectangle((0, y_top - 0.03), 1, 0.03, fill=True, color=bg_color))
-            ax_panel.text(0.5, y_top - 0.015, title, color='white', weight='bold', ha='center', va='center', fontsize=10)
+            ax_panel.text(0.5, y_top - 0.015, title, color='white', weight='bold', ha='center', va='center', fontsize=9)
             ax_panel.add_patch(plt.Rectangle((0, y_top - height), 1, height - 0.03, fill=False, edgecolor='black', linewidth=1.2))
 
         draw_box(y_top=0.83, height=0.25, title="Localización geográfica")
         ax_panel.imshow(Image.open(inset_temp), extent=[0.05, 0.95, 0.65, 0.79], aspect='auto')
         estado_txt = estado.strip() if estado.strip() else "No especificado"
         municipio_txt = municipio.strip() if municipio.strip() else "No especificado"
-        ax_panel.text(0.5, 0.615, f"Estado: {estado_txt}\nMunicipio: {municipio_txt}\nPolígono ZOFEMAT", ha='center', va='center', fontsize=9)
+        ax_panel.text(0.5, 0.615, f"Estado: {estado_txt}\nMunicipio: {municipio_txt}\nPolígono ZOFEMAT", ha='center', va='center', fontsize=8)
 
         altura_simbologia = 0.03 + (len(datos_extraidos) * 0.07)
         draw_box(y_top=0.56, height=altura_simbologia, title="Simbología")
@@ -142,32 +147,34 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         for nombre, desc, color in datos_extraidos:
             ax_panel.add_patch(plt.Rectangle((0.15, y_offset - 0.0125), 0.08, 0.025, fill=True, facecolor=color, alpha=0.5, edgecolor='black', linewidth=1))
             nombre_wrap = "\n".join(textwrap.wrap(nombre, width=35))
-            ax_panel.text(0.26, y_offset + 0.012, nombre_wrap, ha='left', va='center', fontsize=8, weight='bold')
+            ax_panel.text(0.26, y_offset + 0.012, nombre_wrap, ha='left', va='center', fontsize=7, weight='bold')
             y_offset -= 0.07 
         
         y_actual = 0.56 - altura_simbologia - 0.02
 
         utm_name = utm_crs.name.replace("WGS 84 / ", "")
         draw_box(y_top=y_actual, height=0.08, title="Sistema de Referencia:", bg_color='#4C8C56')
-        ax_panel.text(0.5, y_actual - 0.055, f"DATUM WGS84 {utm_name}\nProyección Transversal de Mercator", ha='center', va='center', fontsize=9)
+        ax_panel.text(0.5, y_actual - 0.055, f"DATUM WGS84 {utm_name}\nProyección Transversal de Mercator", ha='center', va='center', fontsize=8)
         y_actual -= 0.10
         
         if autor and autor.strip():
             draw_box(y_top=y_actual, height=0.08, title="Autor del Levantamiento:", bg_color='#A01F41')
-            ax_panel.text(0.5, y_actual - 0.055, autor.strip(), ha='center', va='center', fontsize=9)
+            ax_panel.text(0.5, y_actual - 0.055, autor.strip(), ha='center', va='center', fontsize=8)
             y_actual -= 0.11
 
         meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
         fecha_str = f"{meses[datetime.now().month - 1]} de {datetime.now().year}"
         ax_panel.add_patch(plt.Rectangle((0, y_actual - 0.05), 1, 0.05, fill=False, edgecolor='black', linewidth=1.2))
-        ax_panel.text(0.5, y_actual - 0.025, f"Fecha de elaboración: {fecha_str}", color='black', weight='bold', ha='center', va='center', fontsize=9)
+        ax_panel.text(0.5, y_actual - 0.025, f"Fecha de elaboración: {fecha_str}", color='black', weight='bold', ha='center', va='center', fontsize=8)
 
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=200, bbox_inches='tight')
+        # 🔥 OPTIMIZACIÓN 5: Renderizado final en 120 DPI (ideal para monitores web)
+        plt.savefig(buf, format='png', dpi=120, bbox_inches='tight')
         
         plt.clf()
         plt.close('all')
-        del fig, fig_main, fig_inset, full_gdf, gdf_utm 
+        # Eliminación forzada de variables gigantes
+        del fig, fig_main, fig_inset, full_gdf, gdf_utm, ax_map, ax_panel 
         gc.collect()
         
         buf.seek(0)
@@ -203,7 +210,7 @@ async def generar_mapa(
         print(f"ERROR CRITICO: {error_trace}")
         return JSONResponse(
             status_code=500,
-            content={"detail": str(e)},
+            content={"detail": str(e), "trace": error_trace},
             headers={"Access-Control-Allow-Origin": "*"}
         )
     finally:
