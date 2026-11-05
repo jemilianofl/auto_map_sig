@@ -129,19 +129,21 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         ax_panel.text(0.5, 0.88, "PROCURADURÍA FEDERAL DE PROTECCIÓN\nAL AMBIENTE", weight='bold', ha='center', va='center', fontsize=9)
         ax_panel.text(0.5, 0.85, "Subprocuraduría de Recursos Naturales", ha='center', va='center', fontsize=8)
 
-        def draw_box(y_top, height, title, bg_color='#A01F41'):
-            ax_panel.add_patch(plt.Rectangle((0, y_top - 0.03), 1, 0.03, fill=True, color=bg_color))
-            ax_panel.text(0.5, y_top - 0.015, title, color='white', weight='bold', ha='center', va='center', fontsize=9)
-            ax_panel.add_patch(plt.Rectangle((0, y_top - height), 1, height - 0.03, fill=False, edgecolor='black', linewidth=1.2))
+        # Agregamos "ax" como primer parámetro
+        def draw_box(ax, y_top, height, title, bg_color='#A01F41'):
+            ax.add_patch(plt.Rectangle((0, y_top - 0.03), 1, 0.03, fill=True, color=bg_color))
+            ax.text(0.5, y_top - 0.015, title, color='white', weight='bold', ha='center', va='center', fontsize=9)
+            ax.add_patch(plt.Rectangle((0, y_top - height), 1, height - 0.03, fill=False, edgecolor='black', linewidth=1.2))
 
-        draw_box(y_top=0.83, height=0.25, title="Localización geográfica")
+        # Y actualizamos las llamadas pasándole "ax_panel"
+        draw_box(ax_panel, y_top=0.83, height=0.25, title="Localización geográfica")
         ax_panel.imshow(Image.open(inset_temp), extent=[0.05, 0.95, 0.65, 0.79], aspect='auto')
         estado_txt = estado.strip() if estado.strip() else "No especificado"
         municipio_txt = municipio.strip() if municipio.strip() else "No especificado"
         ax_panel.text(0.5, 0.615, f"Estado: {estado_txt}\nMunicipio: {municipio_txt}\nPolígono ZOFEMAT", ha='center', va='center', fontsize=8)
 
         altura_simbologia = 0.03 + (len(datos_extraidos) * 0.07)
-        draw_box(y_top=0.56, height=altura_simbologia, title="Simbología")
+        draw_box(ax_panel, y_top=0.56, height=altura_simbologia, title="Simbología")
         y_offset = 0.56 - 0.03 - 0.035
         
         for nombre, desc, color in datos_extraidos:
@@ -153,9 +155,14 @@ def procesar_mapa_sync(kml_path, autor, config_simbologia, estado, municipio):
         y_actual = 0.56 - altura_simbologia - 0.02
 
         utm_name = utm_crs.name.replace("WGS 84 / ", "")
-        draw_box(y_top=y_actual, height=0.08, title="Sistema de Referencia:", bg_color='#4C8C56')
+        draw_box(ax_panel, y_top=y_actual, height=0.08, title="Sistema de Referencia:", bg_color='#4C8C56')
         ax_panel.text(0.5, y_actual - 0.055, f"DATUM WGS84 {utm_name}\nProyección Transversal de Mercator", ha='center', va='center', fontsize=8)
         y_actual -= 0.10
+        
+        if autor and autor.strip():
+            draw_box(ax_panel, y_top=y_actual, height=0.08, title="Autor del Levantamiento:", bg_color='#A01F41')
+            ax_panel.text(0.5, y_actual - 0.055, autor.strip(), ha='center', va='center', fontsize=8)
+            y_actual -= 0.11
         
         if autor and autor.strip():
             draw_box(y_top=y_actual, height=0.08, title="Autor del Levantamiento:", bg_color='#A01F41')
