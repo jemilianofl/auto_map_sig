@@ -19,8 +19,8 @@ SHELL ["conda", "run", "-n", "mapa_env", "/bin/bash", "-c"]
 # Copiamos el código fuente y los recursos (header.png, footer.png)
 COPY . /app
 
-# Exponemos el puerto que usará Render (por defecto 8000 o el que asigne la variable PORT)
-EXPOSE 8000
+# Exponemos el puerto para Google Cloud Run
+EXPOSE 8080
 
-# Comando de inicio del servidor web
-CMD ["conda", "run", "--no-capture-output", "-n", "mapa_env", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando de inicio
+CMD ["conda", "run", "--no-capture-output", "-n", "mapa_env", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
